@@ -9,7 +9,6 @@ import kucoinfuturesRest from '../kucoinfutures.js';
 import { ExchangeError } from '../base/errors.js';
 import { ArrayCache, ArrayCacheBySymbolById } from '../base/ws/Cache.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class kucoinfutures extends kucoinfuturesRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -201,7 +200,7 @@ export default class kucoinfutures extends kucoinfuturesRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrade(client, message) {
         //
@@ -425,7 +424,7 @@ export default class kucoinfutures extends kucoinfuturesRest {
         if (this.newUpdates) {
             limit = orders.getLimit(symbol, limit);
         }
-        return this.filterBySymbolSinceLimit(orders, symbol, since, limit, true);
+        return this.filterBySymbolSinceLimit(orders, symbol, since, limit);
     }
     parseWsOrderStatus(status) {
         const statuses = {

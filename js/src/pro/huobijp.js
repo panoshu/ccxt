@@ -9,7 +9,6 @@ import huobijpRest from '../huobijp.js';
 import { ExchangeError } from '../base/errors.js';
 import { ArrayCache, ArrayCacheByTimestamp } from '../base/ws/Cache.js';
 // ----------------------------------------------------------------------------
-// @ts-expect-error
 export default class huobijp extends huobijpRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -143,7 +142,7 @@ export default class huobijp extends huobijpRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrades(client, message) {
         //
@@ -222,7 +221,7 @@ export default class huobijp extends huobijpRest {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0);
     }
     handleOHLCV(client, message) {
         //

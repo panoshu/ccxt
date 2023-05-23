@@ -8,7 +8,6 @@ var sha512 = require('./static_dependencies/noble-hashes/sha512.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class coinone extends coinone$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -880,7 +879,7 @@ class coinone extends coinone$1 {
     }
     handleErrors(code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (response === undefined) {
-            return;
+            return undefined;
         }
         if ('result' in response) {
             const result = response['result'];
@@ -897,6 +896,7 @@ class coinone extends coinone$1 {
         else {
             throw new errors.ExchangeError(this.id + ' ' + body);
         }
+        return undefined;
     }
 }
 

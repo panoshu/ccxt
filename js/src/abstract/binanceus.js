@@ -4,6 +4,8 @@
 // https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 // EDIT THE CORRESPONDENT .ts FILE INSTEAD
 
+// -------------------------------------------------------------------------------
 import _binance from '../binance.js';
-export default class binance extends _binance {
+class binance extends _binance {
 }
+export default binance;

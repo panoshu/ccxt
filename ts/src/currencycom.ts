@@ -6,10 +6,10 @@ import { BadSymbol, ExchangeError, ArgumentsRequired, ExchangeNotAvailable, Insu
 import { Precise } from './base/Precise.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
+import { Int, OrderSide } from './base/types.js';
 
 //  ---------------------------------------------------------------------------
 
-// @ts-expect-error
 export default class currencycom extends Exchange {
     describe () {
         return this.deepExtend (super.describe (), {
@@ -454,11 +454,12 @@ export default class currencycom extends Exchange {
             const base = this.safeCurrencyCode (baseId);
             const quote = this.safeCurrencyCode (quoteId);
             let symbol = base + '/' + quote;
-            const type = this.safeString (market, 'marketType');
-            const spot = (type === 'SPOT');
+            const typeRaw = this.safeString (market, 'marketType');
+            const spot = (typeRaw === 'SPOT');
             const futures = false;
-            const swap = (type === 'LEVERAGE');
-            const margin = swap; // as we decided to set
+            const swap = (typeRaw === 'LEVERAGE');
+            const type = swap ? 'swap' : 'spot';
+            const margin = undefined;
             if (swap) {
                 symbol = symbol.replace (this.options['leverage_markets_suffix'], '');
                 symbol += ':' + quote;
@@ -749,7 +750,7 @@ export default class currencycom extends Exchange {
         return this.parseBalance (response);
     }
 
-    async fetchOrderBook (symbol, limit = undefined, params = {}) {
+    async fetchOrderBook (symbol: string, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchOrderBook
@@ -867,7 +868,7 @@ export default class currencycom extends Exchange {
         }, market);
     }
 
-    async fetchTicker (symbol, params = {}) {
+    async fetchTicker (symbol: string, params = {}) {
         /**
          * @method
          * @name currencycom#fetchTicker
@@ -958,7 +959,7 @@ export default class currencycom extends Exchange {
         ];
     }
 
-    async fetchOHLCV (symbol, timeframe = '1m', since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchOHLCV (symbol: string, timeframe = '1m', since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchOHLCV
@@ -1071,7 +1072,7 @@ export default class currencycom extends Exchange {
         }, market);
     }
 
-    async fetchTrades (symbol, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchTrades (symbol: string, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchTrades
@@ -1265,7 +1266,7 @@ export default class currencycom extends Exchange {
         return this.safeString (statuses, status, status);
     }
 
-    async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
+    async createOrder (symbol: string, type, side: OrderSide, amount, price = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#createOrder
@@ -1360,7 +1361,7 @@ export default class currencycom extends Exchange {
         return this.parseOrder (response, market);
     }
 
-    async fetchOpenOrders (symbol: string = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchOpenOrders (symbol: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchOpenOrders
@@ -1406,7 +1407,7 @@ export default class currencycom extends Exchange {
         return this.parseOrders (response, market, since, limit, params);
     }
 
-    async cancelOrder (id, symbol: string = undefined, params = {}) {
+    async cancelOrder (id: string, symbol: string = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#cancelOrder
@@ -1449,7 +1450,7 @@ export default class currencycom extends Exchange {
         return this.parseOrder (response, market);
     }
 
-    async fetchMyTrades (symbol: string = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchMyTrades (symbol: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchMyTrades
@@ -1493,7 +1494,7 @@ export default class currencycom extends Exchange {
         return this.parseTrades (response, market, since, limit);
     }
 
-    async fetchDeposits (code: string = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchDeposits (code: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchDeposits
@@ -1507,7 +1508,7 @@ export default class currencycom extends Exchange {
         return await this.fetchTransactionsByMethod ('privateGetV2Deposits', code, since, limit, params);
     }
 
-    async fetchWithdrawals (code: string = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchWithdrawals (code: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchWithdrawals
@@ -1521,7 +1522,7 @@ export default class currencycom extends Exchange {
         return await this.fetchTransactionsByMethod ('privateGetV2Withdrawals', code, since, limit, params);
     }
 
-    async fetchTransactions (code: string = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchTransactions (code: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchTransactions
@@ -1535,7 +1536,7 @@ export default class currencycom extends Exchange {
         return await this.fetchTransactionsByMethod ('privateGetV2Transactions', code, since, limit, params);
     }
 
-    async fetchTransactionsByMethod (method, code = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchTransactionsByMethod (method, code: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         await this.loadMarkets ();
         const request = {};
         let currency = undefined;
@@ -1636,7 +1637,7 @@ export default class currencycom extends Exchange {
         return this.safeString (types, type, type);
     }
 
-    async fetchLedger (code: string = undefined, since: any = undefined, limit: any = undefined, params = {}) {
+    async fetchLedger (code: string = undefined, since: Int = undefined, limit: Int = undefined, params = {}) {
         /**
          * @method
          * @name currencycom#fetchLedger
@@ -1741,7 +1742,7 @@ export default class currencycom extends Exchange {
         return this.safeString (types, type, type);
     }
 
-    async fetchLeverage (symbol, params = {}) {
+    async fetchLeverage (symbol: string, params = {}) {
         /**
          * @method
          * @name currencycom#fetchLeverage
@@ -1765,7 +1766,7 @@ export default class currencycom extends Exchange {
         return this.safeNumber (response, 'value');
     }
 
-    async fetchDepositAddress (code, params = {}) {
+    async fetchDepositAddress (code: string, params = {}) {
         /**
          * @method
          * @name currencycom#fetchDepositAddress
@@ -1799,7 +1800,7 @@ export default class currencycom extends Exchange {
         };
     }
 
-    sign (path, api: any = 'public', method = 'GET', params = {}, headers: any = undefined, body: any = undefined) {
+    sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         let url = this.urls['api'][api] + '/' + path;
         if (path === 'historicalTrades') {
             headers = {
@@ -1890,10 +1891,11 @@ export default class currencycom extends Exchange {
         const unrealizedProfit = this.safeNumber (position, 'upl');
         const marginCoeff = this.safeString (position, 'margin');
         const leverage = Precise.stringDiv ('1', marginCoeff);
-        return {
+        return this.safePosition ({
             'symbol': symbol,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
+            'lastUpdateTimestamp': undefined,
             'contracts': this.parseNumber (quantity),
             'contractSize': undefined,
             'entryPrice': entryPrice,
@@ -1906,6 +1908,7 @@ export default class currencycom extends Exchange {
             'marginMode': undefined,
             'notional': undefined,
             'markPrice': undefined,
+            'lastPrice': undefined,
             'liquidationPrice': undefined,
             'initialMargin': undefined,
             'initialMarginPercentage': undefined,
@@ -1914,7 +1917,7 @@ export default class currencycom extends Exchange {
             'marginRatio': undefined,
             'info': position,
             'id': undefined,
-        };
+        });
     }
 
     handleErrors (httpCode, reason, url, method, headers, body, response, requestHeaders, requestBody) {
@@ -1936,7 +1939,7 @@ export default class currencycom extends Exchange {
             }
         }
         if (response === undefined) {
-            return; // fallback to default error handler
+            return undefined; // fallback to default error handler
         }
         //
         //     {"code":-1128,"msg":"Combination of optional parameters invalid."}
@@ -1949,5 +1952,6 @@ export default class currencycom extends Exchange {
             this.throwBroadlyMatchedException (this.exceptions['broad'], message, feedback);
             throw new ExchangeError (feedback);
         }
+        return undefined;
     }
 }

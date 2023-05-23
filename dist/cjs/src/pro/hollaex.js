@@ -7,7 +7,6 @@ var sha256 = require('../static_dependencies/noble-hashes/sha256.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class hollaex extends hollaex$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -128,7 +127,7 @@ class hollaex extends hollaex$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrades(client, message) {
         //
@@ -188,7 +187,7 @@ class hollaex extends hollaex$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySymbolSinceLimit(trades, symbol, since, limit, true);
+        return this.filterBySymbolSinceLimit(trades, symbol, since, limit);
     }
     handleMyTrades(client, message, subscription = undefined) {
         //
@@ -268,7 +267,7 @@ class hollaex extends hollaex$1 {
         if (this.newUpdates) {
             limit = orders.getLimit(symbol, limit);
         }
-        return this.filterBySymbolSinceLimit(orders, symbol, since, limit, true);
+        return this.filterBySymbolSinceLimit(orders, symbol, since, limit);
     }
     handleOrder(client, message, subscription = undefined) {
         //

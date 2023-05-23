@@ -7,7 +7,6 @@ var sha256 = require('./static_dependencies/noble-hashes/sha256.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class bitforex extends bitforex$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -701,19 +700,20 @@ class bitforex extends bitforex$1 {
     }
     handleErrors(code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (typeof body !== 'string') {
-            return; // fallback to default error handler
+            return undefined; // fallback to default error handler
         }
         if ((body[0] === '{') || (body[0] === '[')) {
             const feedback = this.id + ' ' + body;
             const success = this.safeValue(response, 'success');
             if (success !== undefined) {
                 if (!success) {
-                    const code = this.safeString(response, 'code');
-                    this.throwExactlyMatchedException(this.exceptions, code, feedback);
+                    const codeInner = this.safeString(response, 'code');
+                    this.throwExactlyMatchedException(this.exceptions, codeInner, feedback);
                     throw new errors.ExchangeError(feedback);
                 }
             }
         }
+        return undefined;
     }
 }
 

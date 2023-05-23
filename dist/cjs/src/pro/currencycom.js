@@ -7,7 +7,6 @@ var sha256 = require('../static_dependencies/noble-hashes/sha256.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class currencycom extends currencycom$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -381,7 +380,7 @@ class currencycom extends currencycom$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     async watchOrderBook(symbol, limit = undefined, params = {}) {
         /**
@@ -427,7 +426,7 @@ class currencycom extends currencycom$1 {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0);
     }
     handleDeltas(bookside, deltas) {
         const prices = Object.keys(deltas);

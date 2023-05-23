@@ -9,7 +9,6 @@ import bitstampRest from '../bitstamp.js';
 import { ArgumentsRequired, AuthenticationError } from '../base/errors.js';
 import { ArrayCache, ArrayCacheBySymbolById } from '../base/ws/Cache.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class bitstamp extends bitstampRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -184,7 +183,7 @@ export default class bitstamp extends bitstampRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     parseWsTrade(trade, market = undefined) {
         //
@@ -292,7 +291,7 @@ export default class bitstamp extends bitstampRest {
         if (this.newUpdates) {
             limit = orders.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(orders, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(orders, since, limit, 'timestamp');
     }
     handleOrders(client, message) {
         //

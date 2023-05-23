@@ -10,7 +10,6 @@ import { NotSupported } from '../base/errors.js';
 import { ArrayCache, ArrayCacheBySymbolById } from '../base/ws/Cache.js';
 import { sha512 } from '../static_dependencies/noble-hashes/sha512.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class exmo extends exmoRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -281,7 +280,7 @@ export default class exmo extends exmoRest {
         };
         const request = this.deepExtend(message, params);
         const trades = await this.watch(url, messageHash, request, messageHash, request);
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrades(client, message) {
         //
@@ -353,7 +352,7 @@ export default class exmo extends exmoRest {
         };
         const request = this.deepExtend(message, query);
         const trades = await this.watch(url, messageHash, request, messageHash, request);
-        return this.filterBySymbolSinceLimit(trades, symbol, since, limit, true);
+        return this.filterBySymbolSinceLimit(trades, symbol, since, limit);
     }
     handleMyTrades(client, message) {
         //

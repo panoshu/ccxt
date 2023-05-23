@@ -7,7 +7,6 @@ var number = require('./base/functions/number.js');
 var sha256 = require('./static_dependencies/noble-hashes/sha256.js');
 
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class cryptocom extends cryptocom$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -40,6 +39,8 @@ class cryptocom extends cryptocom$1 {
                 'fetchDepositAddress': true,
                 'fetchDepositAddressesByNetwork': true,
                 'fetchDeposits': true,
+                'fetchDepositWithdrawFee': 'emulated',
+                'fetchDepositWithdrawFees': true,
                 'fetchFundingHistory': false,
                 'fetchFundingRate': false,
                 'fetchFundingRates': false,
@@ -293,6 +294,17 @@ class cryptocom extends cryptocom$1 {
                     'derivatives': 'DERIVATIVES',
                     'swap': 'DERIVATIVES',
                     'future': 'DERIVATIVES',
+                },
+                'networks': {
+                    'BEP20': 'BSC',
+                    'ERC20': 'ETH',
+                    'TRX': 'TRON',
+                    'TRC20': 'TRON',
+                },
+                'networksById': {
+                    'BSC': 'BEP20',
+                    'ETH': 'ERC20',
+                    'TRON': 'TRC20',
                 },
             },
             // https://exchange-docs.crypto.com/spot/index.html#response-and-reason-codes
@@ -818,6 +830,8 @@ class cryptocom extends cryptocom$1 {
         /**
          * @method
          * @name cryptocom#fetchOHLCV
+         * @see https://exchange-docs.crypto.com/derivatives/index.html#public-get-candlestick
+         * @see https://exchange-docs.crypto.com/spot/index.html#public-get-candlestick
          * @description fetches historical candlestick data containing the open, high, low, and close price, and the volume of a market
          * @param {string} symbol unified symbol of the market to fetch OHLCV data for
          * @param {string} timeframe the length of time each candle represents
@@ -832,20 +846,28 @@ class cryptocom extends cryptocom$1 {
             'instrument_name': market['id'],
             'timeframe': this.safeString(this.timeframes, timeframe, timeframe),
         };
-        const [marketType, query] = this.handleMarketTypeAndParams('fetchOHLCV', market, params);
-        const method = this.getSupportedMapping(marketType, {
-            'spot': 'v2PublicGetPublicGetCandlestick',
-            'future': 'derivativesPublicGetPublicGetCandlestick',
-            'swap': 'derivativesPublicGetPublicGetCandlestick',
-        });
-        if (marketType !== 'spot') {
+        if (!market['spot']) {
             let reqLimit = 100;
             if (limit !== undefined) {
                 reqLimit = limit;
             }
             request['count'] = reqLimit;
         }
-        const response = await this[method](this.extend(request, query));
+        if (since !== undefined) {
+            request['start_ts'] = since;
+        }
+        const until = this.safeInteger2(params, 'until', 'till');
+        params = this.omit(params, ['until', 'till']);
+        if (until !== undefined) {
+            request['end_ts'] = until;
+        }
+        let response = undefined;
+        if (market['spot']) {
+            response = await this.v2PublicGetPublicGetCandlestick(this.extend(request, params));
+        }
+        else if (market['contract']) {
+            response = await this.derivativesPublicGetPublicGetCandlestick(this.extend(request, params));
+        }
         // {
         //     "code":0,
         //     "method":"public/get-candlestick",
@@ -1148,6 +1170,11 @@ class cryptocom extends cryptocom$1 {
         };
         if ((uppercaseType === 'LIMIT') || (uppercaseType === 'STOP_LIMIT')) {
             request['price'] = this.priceToPrecision(symbol, price);
+        }
+        const clientOrderId = this.safeString(params, 'clientOrderId');
+        if (clientOrderId) {
+            request['client_oid'] = clientOrderId;
+            params = this.omit(params, ['clientOrderId']);
         }
         const postOnly = this.safeValue(params, 'postOnly', false);
         if (postOnly) {
@@ -2441,11 +2468,77 @@ class cryptocom extends cryptocom$1 {
         }
         return [marginMode, params];
     }
+    parseDepositWithdrawFee(fee, currency = undefined) {
+        //
+        //    {
+        //        full_name: 'Alchemix',
+        //        default_network: 'ETH',
+        //        network_list: [
+        //          {
+        //            network_id: 'ETH',
+        //            withdrawal_fee: '0.25000000',
+        //            withdraw_enabled: true,
+        //            min_withdrawal_amount: '0.5',
+        //            deposit_enabled: true,
+        //            confirmation_required: '0'
+        //          }
+        //        ]
+        //    }
+        //
+        const networkList = this.safeValue(fee, 'network_list');
+        const networkListLength = networkList.length;
+        const result = {
+            'info': fee,
+            'withdraw': {
+                'fee': undefined,
+                'percentage': undefined,
+            },
+            'deposit': {
+                'fee': undefined,
+                'percentage': undefined,
+            },
+            'networks': {},
+        };
+        if (networkList !== undefined) {
+            for (let i = 0; i < networkListLength; i++) {
+                const networkInfo = networkList[i];
+                const networkId = this.safeString(networkInfo, 'network_id');
+                const currencyCode = this.safeString(currency, 'code');
+                const networkCode = this.networkIdToCode(networkId, currencyCode);
+                result['networks'][networkCode] = {
+                    'deposit': { 'fee': undefined, 'percentage': undefined },
+                    'withdraw': { 'fee': this.safeNumber(networkInfo, 'withdrawal_fee'), 'percentage': false },
+                };
+                if (networkListLength === 1) {
+                    result['withdraw']['fee'] = this.safeNumber(networkInfo, 'withdrawal_fee');
+                    result['withdraw']['percentage'] = false;
+                }
+            }
+        }
+        return result;
+    }
+    async fetchDepositWithdrawFees(codes = undefined, params = {}) {
+        /**
+         * @method
+         * @name cryptocom#fetchDepositWithdrawFees
+         * @description fetch deposit and withdraw fees
+         * @see https://exchange-docs.crypto.com/spot/index.html#private-get-currency-networks
+         * @param {[string]|undefined} codes list of unified currency codes
+         * @param {object} params extra parameters specific to the cryptocom api endpoint
+         * @returns {object} a list of [fee structures]{@link https://docs.ccxt.com/en/latest/manual.html#fee-structure}
+         */
+        await this.loadMarkets();
+        const response = await this.v2PrivatePostPrivateGetCurrencyNetworks(params);
+        const data = this.safeValue(response, 'result');
+        const currencyMap = this.safeValue(data, 'currency_map');
+        return this.parseDepositWithdrawFees(currencyMap, codes, 'full_name');
+    }
     nonce() {
         return this.milliseconds();
     }
     sign(path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
-        const [type, access] = api;
+        const type = this.safeString(api, 0);
+        const access = this.safeString(api, 1);
         let url = this.urls['api'][type] + '/' + path;
         const query = this.omit(params, this.extractParams(path));
         if (access === 'public') {
@@ -2497,6 +2590,7 @@ class cryptocom extends cryptocom$1 {
             this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
             throw new errors.ExchangeError(this.id + ' ' + body);
         }
+        return undefined;
     }
 }
 

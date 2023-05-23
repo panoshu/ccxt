@@ -8,7 +8,6 @@ var sha256 = require('./static_dependencies/noble-hashes/sha256.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class poloniexfutures extends poloniexfutures$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -1730,7 +1729,7 @@ class poloniexfutures extends poloniexfutures$1 {
     handleErrors(code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (!response) {
             this.throwBroadlyMatchedException(this.exceptions['broad'], body, body);
-            return;
+            return undefined;
         }
         //
         // bad
@@ -1744,6 +1743,7 @@ class poloniexfutures extends poloniexfutures$1 {
         this.throwExactlyMatchedException(this.exceptions['exact'], message, feedback);
         this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
         this.throwBroadlyMatchedException(this.exceptions['broad'], body, feedback);
+        return undefined;
     }
 }
 

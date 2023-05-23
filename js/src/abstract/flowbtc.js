@@ -4,6 +4,8 @@
 // https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 // EDIT THE CORRESPONDENT .ts FILE INSTEAD
 
+// -------------------------------------------------------------------------------
 import _ndax from '../ndax.js';
-export default class ndax extends _ndax {
+class ndax extends _ndax {
 }
+export default ndax;

@@ -6,7 +6,6 @@ var Cache = require('../base/ws/Cache.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class bitstamp extends bitstamp$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -181,7 +180,7 @@ class bitstamp extends bitstamp$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     parseWsTrade(trade, market = undefined) {
         //
@@ -289,7 +288,7 @@ class bitstamp extends bitstamp$1 {
         if (this.newUpdates) {
             limit = orders.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(orders, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(orders, since, limit, 'timestamp');
     }
     handleOrders(client, message) {
         //

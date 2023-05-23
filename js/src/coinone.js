@@ -11,7 +11,6 @@ import { Precise } from './base/Precise.js';
 import { TICK_SIZE } from './base/functions/number.js';
 import { sha512 } from './static_dependencies/noble-hashes/sha512.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class coinone extends Exchange {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -883,7 +882,7 @@ export default class coinone extends Exchange {
     }
     handleErrors(code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (response === undefined) {
-            return;
+            return undefined;
         }
         if ('result' in response) {
             const result = response['result'];
@@ -900,5 +899,6 @@ export default class coinone extends Exchange {
         else {
             throw new ExchangeError(this.id + ' ' + body);
         }
+        return undefined;
     }
 }

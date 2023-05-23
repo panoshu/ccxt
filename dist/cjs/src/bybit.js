@@ -5,10 +5,10 @@ var number = require('./base/functions/number.js');
 var errors = require('./base/errors.js');
 var Precise = require('./base/Precise.js');
 var sha256 = require('./static_dependencies/noble-hashes/sha256.js');
+var rsa = require('./base/functions/rsa.js');
 
 //  ---------------------------------------------------------------------------
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 class bybit extends bybit$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -173,6 +173,8 @@ class bybit extends bybit$1 {
                         'spot/v3/public/quote/ticker/bookTicker': 1,
                         'spot/v3/public/server-time': 1,
                         'spot/v3/public/infos': 1,
+                        'spot/v3/public/margin-product-infos': 1,
+                        'spot/v3/public/margin-ensure-tokens': 1,
                         // data
                         'v2/public/time': 1,
                         'v3/public/time': 1,
@@ -232,6 +234,10 @@ class bybit extends bybit$1 {
                         'v5/market/delivery-price': 1,
                         'v5/spot-lever-token/info': 1,
                         'v5/spot-lever-token/reference': 1,
+                        'v5/announcements/index': 1,
+                        'v5/spot-cross-margin-trade/pledge-token': 1,
+                        'v5/spot-cross-margin-trade/borrow-token': 1,
+                        'v5/ins-loan/ensure-tokens-convert': 1,
                     },
                 },
                 'private': {
@@ -295,6 +301,9 @@ class bybit extends bybit$1 {
                         'spot/v3/private/cross-margin-account': 10,
                         'spot/v3/private/cross-margin-loan-info': 10,
                         'spot/v3/private/cross-margin-repay-history': 10,
+                        'spot/v3/private/margin-loan-infos': 10,
+                        'spot/v3/private/margin-repaid-infos': 10,
+                        'spot/v3/private/margin-ltv': 10,
                         // account
                         'asset/v1/private/transfer/list': 50,
                         'asset/v3/private/transfer/inter-transfer/list/query': 0.84,
@@ -351,6 +360,7 @@ class bybit extends bybit$1 {
                         'v5/order/spot-borrow-check': 2.5,
                         'v5/order/realtime': 2.5,
                         'v5/position/list': 2.5,
+                        'v5/position/switch-mode': 2.5,
                         'v5/execution/list': 2.5,
                         'v5/position/closed-pnl': 2.5,
                         'v5/account/wallet-balance': 2.5,
@@ -383,6 +393,11 @@ class bybit extends bybit$1 {
                         // user
                         'v5/user/query-sub-members': 10,
                         'v5/user/query-api': 10,
+                        'v5/spot-cross-margin-trade/loan-info': 1,
+                        'v5/spot-cross-margin-trade/account': 1,
+                        'v5/spot-cross-margin-trade/orders': 1,
+                        'v5/spot-cross-margin-trade/repay-history': 1,
+                        'v5/ins-loan/ltv-convert': 1,
                     },
                     'post': {
                         // inverse swap
@@ -548,6 +563,9 @@ class bybit extends bybit$1 {
                         'v5/position/set-tpsl-mode': 2.5,
                         'v5/position/set-risk-limit': 2.5,
                         'v5/position/trading-stop': 2.5,
+                        'v5/position/switch-isolated': 2.5,
+                        'v5/position/switch-mode': 2.5,
+                        'v5/position/set-auto-add-margin': 2.5,
                         'v5/account/upgrade-to-uta': 2.5,
                         'v5/account/set-margin-mode': 2.5,
                         'v5/asset/transfer/inter-transfer': 2.5,
@@ -569,6 +587,9 @@ class bybit extends bybit$1 {
                         'v5/user/update-sub-api': 10,
                         'v5/user/delete-api': 10,
                         'v5/user/delete-sub-api': 10,
+                        'v5/spot-cross-margin-trade/loan': 2.5,
+                        'v5/spot-cross-margin-trade/repay': 2.5,
+                        'v5/spot-cross-margin-trade/switch': 2.5, // 20/s => cost = 50 / 20 = 2.5
                     },
                     'delete': {
                         // spot
@@ -736,6 +757,7 @@ class bybit extends bybit$1 {
                     '131097': errors.ExchangeError,
                     '131098': errors.ExchangeError,
                     '131099': errors.ExchangeError,
+                    '140001': errors.OrderNotFound,
                     '140003': errors.InvalidOrder,
                     '140004': errors.InsufficientFunds,
                     '140005': errors.InvalidOrder,
@@ -1254,6 +1276,11 @@ class bybit extends bybit$1 {
             const chains = this.safeValue(currency, 'chains', []);
             const networks = {};
             let minPrecision = undefined;
+            let minWithdrawFeeString = undefined;
+            let minWithdrawString = undefined;
+            let minDepositString = undefined;
+            let deposit = false;
+            let withdraw = false;
             for (let j = 0; j < chains.length; j++) {
                 const chain = chains[j];
                 const networkId = this.safeString(chain, 'chain');
@@ -1261,23 +1288,37 @@ class bybit extends bybit$1 {
                 const precision = this.parseNumber(this.parsePrecision(this.safeString(chain, 'minAccuracy')));
                 minPrecision = (minPrecision === undefined) ? precision : Math.min(minPrecision, precision);
                 const depositAllowed = this.safeInteger(chain, 'chainDeposit') === 1;
+                deposit = (depositAllowed) ? depositAllowed : deposit;
                 const withdrawAllowed = this.safeInteger(chain, 'chainWithdraw') === 1;
+                withdraw = (withdrawAllowed) ? withdrawAllowed : withdraw;
+                const withdrawFeeString = this.safeString(chain, 'withdrawFee');
+                if (withdrawFeeString !== undefined) {
+                    minWithdrawFeeString = (minWithdrawFeeString === undefined) ? withdrawFeeString : Precise["default"].stringMin(withdrawFeeString, minWithdrawFeeString);
+                }
+                const minNetworkWithdrawString = this.safeString(chain, 'withdrawMin');
+                if (minNetworkWithdrawString !== undefined) {
+                    minWithdrawString = (minWithdrawString === undefined) ? minNetworkWithdrawString : Precise["default"].stringMin(minNetworkWithdrawString, minWithdrawString);
+                }
+                const minNetworkDepositString = this.safeString(chain, 'depositMin');
+                if (minNetworkDepositString !== undefined) {
+                    minDepositString = (minDepositString === undefined) ? minNetworkDepositString : Precise["default"].stringMin(minNetworkDepositString, minDepositString);
+                }
                 networks[networkCode] = {
                     'info': chain,
                     'id': networkId,
                     'network': networkCode,
-                    'active': undefined,
+                    'active': depositAllowed && withdrawAllowed,
                     'deposit': depositAllowed,
                     'withdraw': withdrawAllowed,
-                    'fee': this.safeNumber(chain, 'withdrawFee'),
+                    'fee': this.parseNumber(withdrawFeeString),
                     'precision': precision,
                     'limits': {
                         'withdraw': {
-                            'min': this.safeNumber(chain, 'withdrawMin'),
+                            'min': this.parseNumber(minNetworkWithdrawString),
                             'max': undefined,
                         },
                         'deposit': {
-                            'min': this.safeNumber(chain, 'depositMin'),
+                            'min': this.parseNumber(minNetworkDepositString),
                             'max': undefined,
                         },
                     },
@@ -1288,14 +1329,22 @@ class bybit extends bybit$1 {
                 'code': code,
                 'id': currencyId,
                 'name': name,
-                'active': undefined,
-                'deposit': undefined,
-                'withdraw': undefined,
-                'fee': undefined,
+                'active': deposit && withdraw,
+                'deposit': deposit,
+                'withdraw': withdraw,
+                'fee': this.parseNumber(minWithdrawFeeString),
                 'precision': minPrecision,
                 'limits': {
                     'amount': {
                         'min': undefined,
+                        'max': undefined,
+                    },
+                    'withdraw': {
+                        'min': this.parseNumber(minWithdrawString),
+                        'max': undefined,
+                    },
+                    'deposit': {
+                        'min': this.parseNumber(minDepositString),
                         'max': undefined,
                     },
                 },
@@ -1445,15 +1494,15 @@ class bybit extends bybit$1 {
         if (paginationCursor !== undefined) {
             while (paginationCursor !== undefined) {
                 params['cursor'] = paginationCursor;
-                const response = await this.publicGetDerivativesV3PublicInstrumentsInfo(params);
-                const data = this.safeValue(response, 'result', {});
-                const rawMarkets = this.safeValue(data, 'list', []);
+                const responseInner = await this.publicGetDerivativesV3PublicInstrumentsInfo(params);
+                const dataNew = this.safeValue(responseInner, 'result', {});
+                const rawMarkets = this.safeValue(dataNew, 'list', []);
                 const rawMarketsLength = rawMarkets.length;
                 if (rawMarketsLength === 0) {
                     break;
                 }
                 markets = this.arrayConcat(rawMarkets, markets);
-                paginationCursor = this.safeString(data, 'nextPageCursor');
+                paginationCursor = this.safeString(dataNew, 'nextPageCursor');
             }
         }
         //
@@ -2222,12 +2271,15 @@ class bybit extends bybit$1 {
          */
         this.checkRequiredSymbol('fetchFundingRateHistory', symbol);
         await this.loadMarkets();
+        if (limit === undefined) {
+            limit = 200;
+        }
         const request = {
-        // 'category': '', // Product type. linear,inverse
-        // 'symbol': '', // Symbol name
-        // 'startTime': 0, // The start timestamp (ms)
-        // 'endTime': 0, // The end timestamp (ms)
-        // 'limit': 0, // Limit for data size per page. [1, 200]. Default: 200
+            // 'category': '', // Product type. linear,inverse
+            // 'symbol': '', // Symbol name
+            // 'startTime': 0, // The start timestamp (ms)
+            // 'endTime': 0, // The end timestamp (ms)
+            'limit': limit, // Limit for data size per page. [1, 200]. Default: 200
         };
         const market = this.market(symbol);
         symbol = market['symbol'];
@@ -2250,8 +2302,12 @@ class bybit extends bybit$1 {
         if (endTime !== undefined) {
             request['endTime'] = endTime;
         }
-        if (limit !== undefined) {
-            request['limit'] = limit;
+        else {
+            if (since !== undefined) {
+                // end time is required when since is not empty
+                const fundingInterval = 60 * 60 * 8 * 1000;
+                request['endTime'] = since + limit * fundingInterval;
+            }
         }
         const response = await this.publicGetV5MarketFundingHistory(this.extend(request, params));
         //
@@ -2422,7 +2478,7 @@ class bybit extends bybit$1 {
         //
         //     {
         //         "symbol": "AAVEUSDT",
-        //         "id": "1274785101965716992",
+        //         "id": "1274785101965716991",
         //         "orderId": "1274784252359089664",
         //         "tradeId": "2270000000031365639",
         //         "orderPrice": "82.5",
@@ -2994,16 +3050,21 @@ class bybit extends bybit$1 {
                 // use this endpoint only we have no other choice
                 // because it requires transfer permission
                 method = 'privateGetAssetV3PrivateTransferAccountCoinsBalanceQuery';
+                request['accountType'] = unifiedType;
             }
             else {
                 if (enableUnifiedAccount) {
                     method = 'privateGetV5AccountWalletBalance';
+                    request['accountType'] = unifiedType;
+                }
+                else if (enableUnifiedMargin) {
+                    method = 'privateGetUnifiedV3PrivateAccountWalletBalance';
                 }
                 else {
                     method = 'privateGetContractV3PrivateAccountWalletBalance';
+                    request['accountType'] = unifiedType;
                 }
             }
-            request['accountType'] = unifiedType;
         }
         const response = await this[method](this.extend(request, params));
         //
@@ -3171,6 +3232,27 @@ class bybit extends bybit$1 {
         //         "positionIdx": 2
         //     }
         //
+        //     {
+        //         "orderId":"0b3499a4-9691-40ec-b2b9-7d94ee0165ff",
+        //         "orderLinkId":"",
+        //         "mmp":false,
+        //         "symbol":"SOLPERP",
+        //         "orderType":"Market",
+        //         "side":"Buy",
+        //         "orderQty":"0.10000000",
+        //         "orderPrice":"23.030",
+        //         "iv":"0",
+        //         "timeInForce":"ImmediateOrCancel",
+        //         "orderStatus":"Created",
+        //         "createdAt":"1683380752146568",
+        //         "basePrice":"0.000",
+        //         "triggerPrice":"0.000",
+        //         "takeProfit":"0.000",
+        //         "stopLoss":"0.000",
+        //         "slTriggerBy":"UNKNOWN",
+        //         "tpTriggerBy":"UNKNOWN"
+        //     }
+        //
         const marketId = this.safeString(order, 'symbol');
         let marketType = 'contract';
         if (market !== undefined) {
@@ -3184,15 +3266,21 @@ class bybit extends bybit$1 {
         }
         market = this.safeMarket(marketId, market, undefined, marketType);
         const symbol = market['symbol'];
-        const timestamp = this.safeInteger(order, 'createdTime');
+        let timestamp = undefined;
+        if ('createdTime' in order) {
+            timestamp = this.safeInteger(order, 'createdTime');
+        }
+        else if ('createdAt' in order) {
+            timestamp = this.safeIntegerProduct(order, 'createdAt', 0.001);
+        }
         const id = this.safeString(order, 'orderId');
         const type = this.safeStringLower(order, 'orderType');
-        const price = this.safeString(order, 'price');
-        const amount = this.safeString(order, 'qty');
+        const price = this.safeString2(order, 'price', 'orderPrice');
+        const amount = this.safeString2(order, 'qty', 'orderQty');
         const cost = this.safeString(order, 'cumExecValue');
         const filled = this.safeString(order, 'cumExecQty');
         const remaining = this.safeString(order, 'leavesQty');
-        const lastTradeTimestamp = this.safeInteger(order, 'updateTime');
+        const lastTradeTimestamp = this.safeInteger(order, 'updatedTime');
         const rawStatus = this.safeString(order, 'orderStatus');
         const status = this.parseOrderStatus(rawStatus);
         const side = this.safeStringLower(order, 'side');
@@ -3211,6 +3299,8 @@ class bybit extends bybit$1 {
         const rawTimeInForce = this.safeString(order, 'timeInForce');
         const timeInForce = this.parseTimeInForce(rawTimeInForce);
         const stopPrice = this.omitZero(this.safeString(order, 'triggerPrice'));
+        const takeProfitPrice = this.omitZero(this.safeString(order, 'takeProfit'));
+        const stopLossPrice = this.omitZero(this.safeString(order, 'stopLoss'));
         return this.safeOrder({
             'info': order,
             'id': id,
@@ -3227,6 +3317,8 @@ class bybit extends bybit$1 {
             'price': price,
             'stopPrice': stopPrice,
             'triggerPrice': stopPrice,
+            'takeProfitPrice': takeProfitPrice,
+            'stopLossPrice': stopLossPrice,
             'amount': amount,
             'cost': cost,
             'average': undefined,
@@ -3491,6 +3583,9 @@ class bybit extends bybit$1 {
                     request['qty'] = this.costToPrecision(symbol, amount);
                 }
             }
+            else {
+                request['qty'] = this.costToPrecision(symbol, amount);
+            }
         }
         else {
             request['qty'] = this.amountToPrecision(symbol, amount);
@@ -3500,9 +3595,9 @@ class bybit extends bybit$1 {
         if (isLimit) {
             request['price'] = this.priceToPrecision(symbol, price);
         }
-        const exchangeSpecificParam = this.safeString(params, 'time_in_force');
-        const timeInForce = this.safeStringLower(params, 'timeInForce');
-        const postOnly = this.isPostOnly(isMarket, exchangeSpecificParam === 'PostOnly', params);
+        const timeInForce = this.safeStringLower(params, 'timeInForce'); // this is same as exchange specific param
+        let postOnly = undefined;
+        [postOnly, params] = this.handlePostOnly(isMarket, timeInForce === 'PostOnly', params);
         if (postOnly) {
             request['timeInForce'] = 'PostOnly';
         }
@@ -3558,7 +3653,7 @@ class bybit extends bybit$1 {
             // mandatory field for options
             request['orderLinkId'] = this.uuid16();
         }
-        params = this.omit(params, ['stopPrice', 'timeInForce', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId']);
+        params = this.omit(params, ['stopPrice', 'timeInForce', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId', 'triggerPrice', 'stopLoss', 'takeProfit']);
         const response = await this.privatePostV5OrderCreate(this.extend(request, params));
         //
         //     {
@@ -3602,6 +3697,9 @@ class bybit extends bybit$1 {
                     request['orderQty'] = this.costToPrecision(symbol, amount);
                 }
             }
+            else {
+                request['orderQty'] = this.costToPrecision(symbol, amount);
+            }
         }
         else {
             request['orderQty'] = this.amountToPrecision(symbol, amount);
@@ -3612,8 +3710,10 @@ class bybit extends bybit$1 {
             }
             request['orderPrice'] = this.priceToPrecision(symbol, price);
         }
-        const isPostOnly = this.isPostOnly(upperCaseType === 'MARKET', type === 'LIMIT_MAKER', params);
-        if (isPostOnly) {
+        const isMarket = (upperCaseType === 'MARKET');
+        let postOnly = undefined;
+        [postOnly, params] = this.handlePostOnly(isMarket, type === 'LIMIT_MAKER', params);
+        if (postOnly) {
             request['orderType'] = 'LIMIT_MAKER';
         }
         const clientOrderId = this.safeString2(params, 'clientOrderId', 'orderLinkId');
@@ -3703,7 +3803,8 @@ class bybit extends bybit$1 {
         }
         const exchangeSpecificParam = this.safeString(params, 'time_in_force');
         const timeInForce = this.safeStringLower(params, 'timeInForce');
-        const postOnly = this.isPostOnly(isMarket, exchangeSpecificParam === 'PostOnly', params);
+        let postOnly = undefined;
+        [postOnly, params] = this.handlePostOnly(isMarket, exchangeSpecificParam === 'PostOnly', params);
         if (postOnly) {
             request['timeInForce'] = 'PostOnly';
         }
@@ -3752,7 +3853,7 @@ class bybit extends bybit$1 {
             // mandatory field for options
             request['orderLinkId'] = this.uuid16();
         }
-        params = this.omit(params, ['stopPrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId']);
+        params = this.omit(params, ['stopPrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId', 'stopLoss', 'takeProfit']);
         const response = await this.privatePostUnifiedV3PrivateOrderCreate(this.extend(request, params));
         //
         //     {
@@ -3806,9 +3907,9 @@ class bybit extends bybit$1 {
         if (isLimit) {
             request['price'] = this.priceToPrecision(symbol, price);
         }
-        const exchangeSpecificParam = this.safeString(params, 'time_in_force');
-        const timeInForce = this.safeStringLower(params, 'timeInForce');
-        const postOnly = this.isPostOnly(isMarket, exchangeSpecificParam === 'PostOnly', params);
+        const timeInForce = this.safeStringLower(params, 'timeInForce'); // same as exchange specific param
+        let postOnly = undefined;
+        [postOnly, params] = this.handlePostOnly(isMarket, timeInForce === 'PostOnly', params);
         if (postOnly) {
             request['timeInForce'] = 'PostOnly';
         }
@@ -3822,7 +3923,7 @@ class bybit extends bybit$1 {
             request['timeInForce'] = 'ImmediateOrCancel';
         }
         let triggerPrice = this.safeNumber2(params, 'triggerPrice', 'stopPrice');
-        const stopLossTriggerPrice = this.safeNumber(params, 'stopLossPrice');
+        const stopLossTriggerPrice = this.safeNumber(params, 'stopLossPrice', triggerPrice);
         const takeProfitTriggerPrice = this.safeNumber(params, 'takeProfitPrice');
         const stopLoss = this.safeNumber(params, 'stopLoss');
         const takeProfit = this.safeNumber(params, 'takeProfit');
@@ -3858,7 +3959,7 @@ class bybit extends bybit$1 {
             // mandatory field for options
             request['orderLinkId'] = this.uuid16();
         }
-        params = this.omit(params, ['stopPrice', 'timeInForce', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId']);
+        params = this.omit(params, ['stopPrice', 'timeInForce', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId', 'triggerPrice', 'stopLoss', 'takeProfit']);
         const response = await this.privatePostContractV3PrivateOrderCreate(this.extend(request, params));
         //
         //     {
@@ -3878,9 +3979,6 @@ class bybit extends bybit$1 {
     async createUsdcOrder(symbol, type, side, amount, price = undefined, params = {}) {
         await this.loadMarkets();
         const market = this.market(symbol);
-        if (type === 'market') {
-            throw new errors.NotSupported(this.id + 'createOrder does not allow market orders for ' + symbol + ' markets');
-        }
         const lowerCaseType = type.toLowerCase();
         if ((price === undefined) && (lowerCaseType === 'limit')) {
             throw new errors.ArgumentsRequired(this.id + ' createOrder requires a price argument for limit orders');
@@ -3907,12 +4005,13 @@ class bybit extends bybit$1 {
         };
         const isMarket = lowerCaseType === 'market';
         const isLimit = lowerCaseType === 'limit';
-        if (isLimit !== undefined) {
+        if (isLimit) {
             request['orderPrice'] = this.priceToPrecision(symbol, price);
         }
         const exchangeSpecificParam = this.safeString(params, 'time_in_force');
         const timeInForce = this.safeStringLower(params, 'timeInForce');
-        const postOnly = this.isPostOnly(isMarket, exchangeSpecificParam === 'PostOnly', params);
+        let postOnly = undefined;
+        [postOnly, params] = this.handlePostOnly(isMarket, exchangeSpecificParam === 'PostOnly', params);
         if (postOnly) {
             request['time_in_force'] = 'PostOnly';
         }
@@ -3965,9 +4064,14 @@ class bybit extends bybit$1 {
             // mandatory field for options
             request['orderLinkId'] = this.uuid16();
         }
-        params = this.omit(params, ['stopPrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId']);
-        const method = market['option'] ? 'privatePostOptionUsdcOpenapiPrivateV1PlaceOrder' : 'privatePostPerpetualUsdcOpenapiPrivateV1PlaceOrder';
-        const response = await this[method](this.extend(request, params));
+        params = this.omit(params, ['stopPrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId', 'stopLoss', 'takeProfit']);
+        let response = undefined;
+        if (market['option']) {
+            response = await this.privatePostOptionUsdcOpenapiPrivateV1PlaceOrder(this.extend(request, params));
+        }
+        else {
+            response = await this.privatePostPerpetualUsdcOpenapiPrivateV1PlaceOrder(this.extend(request, params));
+        }
         //
         //     {
         //         "retCode":0,
@@ -4025,21 +4129,34 @@ class bybit extends bybit$1 {
         if (price !== undefined) {
             request['price'] = this.priceToPrecision(symbol, price);
         }
-        const triggerPrice = this.safeValue2(params, 'stopPrice', 'triggerPrice');
-        const stopLossPrice = this.safeValue(params, 'stopLossPrice');
-        const isStopLossOrder = stopLossPrice !== undefined;
-        const takeProfitPrice = this.safeValue(params, 'takeProfitPrice');
-        const isTakeProfitOrder = takeProfitPrice !== undefined;
-        if (isStopLossOrder) {
-            request['stopLoss'] = this.priceToPrecision(symbol, stopLossPrice);
-        }
-        if (isTakeProfitOrder) {
-            request['takeProfit'] = this.priceToPrecision(symbol, takeProfitPrice);
+        let triggerPrice = this.safeNumber2(params, 'triggerPrice', 'stopPrice');
+        const stopLossTriggerPrice = this.safeNumber(params, 'stopLossPrice');
+        const takeProfitTriggerPrice = this.safeNumber(params, 'takeProfitPrice');
+        const stopLoss = this.safeNumber(params, 'stopLoss');
+        const takeProfit = this.safeNumber(params, 'takeProfit');
+        const isStopLossTriggerOrder = stopLossTriggerPrice !== undefined;
+        const isTakeProfitTriggerOrder = takeProfitTriggerPrice !== undefined;
+        const isStopLoss = stopLoss !== undefined;
+        const isTakeProfit = takeProfit !== undefined;
+        if (isStopLossTriggerOrder || isTakeProfitTriggerOrder) {
+            triggerPrice = isStopLossTriggerOrder ? stopLossTriggerPrice : takeProfitTriggerPrice;
         }
         if (triggerPrice !== undefined) {
             request['triggerPrice'] = this.priceToPrecision(symbol, triggerPrice);
         }
-        params = this.omit(params, ['stopPrice', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice']);
+        if (isStopLoss || isTakeProfit) {
+            if (isStopLoss) {
+                request['stopLoss'] = this.priceToPrecision(symbol, stopLoss);
+            }
+            if (isTakeProfit) {
+                request['takeProfit'] = this.priceToPrecision(symbol, takeProfit);
+            }
+        }
+        const clientOrderId = this.safeString(params, 'clientOrderId');
+        if (clientOrderId !== undefined) {
+            request['orderLinkId'] = clientOrderId;
+        }
+        params = this.omit(params, ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'triggerPrice', 'clientOrderId', 'stopLoss', 'takeProfit']);
         const response = await this.privatePostV5OrderAmend(this.extend(request, params));
         //
         //     {
@@ -4111,26 +4228,34 @@ class bybit extends bybit$1 {
         else if (timeInForce === 'ioc') {
             request['timeInForce'] = 'ImmediateOrCancel';
         }
-        const triggerPrice = this.safeValue2(params, 'stopPrice', 'triggerPrice');
-        const stopLossPrice = this.safeValue(params, 'stopLossPrice');
-        const isStopLossOrder = stopLossPrice !== undefined;
-        const takeProfitPrice = this.safeValue(params, 'takeProfitPrice');
-        const isTakeProfitOrder = takeProfitPrice !== undefined;
-        if (isStopLossOrder) {
-            request['stopLoss'] = this.priceToPrecision(symbol, stopLossPrice);
-        }
-        if (isTakeProfitOrder) {
-            request['takeProfit'] = this.priceToPrecision(symbol, takeProfitPrice);
+        let triggerPrice = this.safeNumber2(params, 'triggerPrice', 'stopPrice');
+        const stopLossTriggerPrice = this.safeNumber(params, 'stopLossPrice');
+        const takeProfitTriggerPrice = this.safeNumber(params, 'takeProfitPrice');
+        const stopLoss = this.safeNumber(params, 'stopLoss');
+        const takeProfit = this.safeNumber(params, 'takeProfit');
+        const isStopLossTriggerOrder = stopLossTriggerPrice !== undefined;
+        const isTakeProfitTriggerOrder = takeProfitTriggerPrice !== undefined;
+        const isStopLoss = stopLoss !== undefined;
+        const isTakeProfit = takeProfit !== undefined;
+        if (isStopLossTriggerOrder || isTakeProfitTriggerOrder) {
+            triggerPrice = isStopLossTriggerOrder ? stopLossTriggerPrice : takeProfitTriggerPrice;
         }
         if (triggerPrice !== undefined) {
-            request['triggerBy'] = 'LastPrice';
             request['triggerPrice'] = this.priceToPrecision(symbol, triggerPrice);
+        }
+        if (isStopLoss || isTakeProfit) {
+            if (isStopLoss) {
+                request['stopLoss'] = this.priceToPrecision(symbol, stopLoss);
+            }
+            if (isTakeProfit) {
+                request['takeProfit'] = this.priceToPrecision(symbol, takeProfit);
+            }
         }
         const clientOrderId = this.safeString(params, 'clientOrderId');
         if (clientOrderId !== undefined) {
             request['orderLinkId'] = clientOrderId;
         }
-        params = this.omit(params, ['stopPrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId']);
+        params = this.omit(params, ['stopPrice', 'timeInForce', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice', 'postOnly', 'clientOrderId', 'stopLoss', 'takeProfit']);
         const response = await this.privatePostUnifiedV3PrivateOrderReplace(this.extend(request, params));
         //
         //     {
@@ -4152,25 +4277,45 @@ class bybit extends bybit$1 {
             'symbol': market['id'],
             'orderId': id,
             'qty': this.amountToPrecision(symbol, amount),
+            // 'orderLinkId': '', // User customised order id. Either orderId or orderLinkId is required
+            // 'triggerPrice': '', // Trigger price. Don't pass it if not modify the qty
+            // 'takeProfit': '', // Take profit price after modification. Don't pass it if not modify the take profit
+            // 'stopLoss': '', // Stop loss price after modification. Don't pass it if not modify the Stop loss
+            // 'tpTriggerBy': '', // The price type to trigger take profit. When set a take profit, this param is required if no initial value for the order
+            // 'slTriggerBy': '', // The price type to trigger stop loss. When set a stop loss, this param is required if no initial value for the order
+            // 'triggerBy': '', // Trigger price type. LastPrice, IndexPrice, MarkPrice, LastPrice
         };
         if (price !== undefined) {
             request['price'] = this.priceToPrecision(symbol, price);
         }
-        const triggerPrice = this.safeValue2(params, 'stopPrice', 'triggerPrice');
-        const stopLossPrice = this.safeValue(params, 'stopLossPrice');
-        const isStopLossOrder = stopLossPrice !== undefined;
-        const takeProfitPrice = this.safeValue(params, 'takeProfitPrice');
-        const isTakeProfitOrder = takeProfitPrice !== undefined;
-        if (isStopLossOrder) {
-            request['stopLoss'] = this.priceToPrecision(symbol, stopLossPrice);
-        }
-        if (isTakeProfitOrder) {
-            request['takeProfit'] = this.priceToPrecision(symbol, takeProfitPrice);
+        let triggerPrice = this.safeNumber2(params, 'triggerPrice', 'stopPrice');
+        const stopLossTriggerPrice = this.safeNumber(params, 'stopLossPrice');
+        const takeProfitTriggerPrice = this.safeNumber(params, 'takeProfitPrice');
+        const stopLoss = this.safeNumber(params, 'stopLoss');
+        const takeProfit = this.safeNumber(params, 'takeProfit');
+        const isStopLossTriggerOrder = stopLossTriggerPrice !== undefined;
+        const isTakeProfitTriggerOrder = takeProfitTriggerPrice !== undefined;
+        const isStopLoss = stopLoss !== undefined;
+        const isTakeProfit = takeProfit !== undefined;
+        if (isStopLossTriggerOrder || isTakeProfitTriggerOrder) {
+            triggerPrice = isStopLossTriggerOrder ? stopLossTriggerPrice : takeProfitTriggerPrice;
         }
         if (triggerPrice !== undefined) {
             request['triggerPrice'] = this.priceToPrecision(symbol, triggerPrice);
         }
-        params = this.omit(params, ['stopPrice', 'triggerPrice', 'stopLossPrice', 'takeProfitPrice']);
+        if (isStopLoss || isTakeProfit) {
+            if (isStopLoss) {
+                request['stopLoss'] = this.priceToPrecision(symbol, stopLoss);
+            }
+            if (isTakeProfit) {
+                request['takeProfit'] = this.priceToPrecision(symbol, takeProfit);
+            }
+        }
+        const clientOrderId = this.safeString(params, 'clientOrderId');
+        if (clientOrderId !== undefined) {
+            request['orderLinkId'] = clientOrderId;
+        }
+        params = this.omit(params, ['stopPrice', 'stopLossPrice', 'takeProfitPrice', 'triggerPrice', 'clientOrderId', 'stopLoss', 'takeProfit']);
         const response = await this.privatePostContractV3PrivateOrderReplace(this.extend(request, params));
         //
         // contract v3
@@ -4721,14 +4866,16 @@ class bybit extends bybit$1 {
         await this.loadMarkets();
         const request = {
         // 'symbol': market['id'],
-        // 'category': string, Type of derivatives product: spot, linear or option.
-        // 'baseCoin': string, Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
-        // 'orderId': string, Order ID
-        // 'orderLinkId': string, Unique user-set order ID
-        // 'orderStatus': string, // Return all status orders if not passed
-        // 'orderFilter': string, Conditional order or active order
+        // 'category', Type of derivatives product: spot, linear or option.
+        // 'baseCoin', Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
+        // 'orderId', Order ID
+        // 'orderLinkId', Unique user-set order ID
+        // 'orderStatus', // Return all status orders if not passed
+        // 'orderFilter', Conditional order or active order
         // 'limit': number, Data quantity per page: Max data value per page is 50, and default value at 20.
-        // 'cursor': string, API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
+        // 'cursor', API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
+        // 'startTime': 0, // The start timestamp (ms) Support UTA only temporarily startTime and endTime must be passed together If not passed, query the past 7 days data by default
+        // 'endTime': 0, // The end timestamp (ms)
         };
         let market = undefined;
         if (symbol === undefined) {
@@ -4770,6 +4917,20 @@ class bybit extends bybit$1 {
         }
         if (limit !== undefined) {
             request['limit'] = limit;
+        }
+        if (since !== undefined) {
+            request['startTime'] = since;
+        }
+        const until = this.safeInteger2(params, 'until', 'till'); // unified in milliseconds
+        const endTime = this.safeInteger(params, 'endTime', until); // exchange-specific in milliseconds
+        params = this.omit(params, ['endTime', 'till', 'until']);
+        if (endTime !== undefined) {
+            request['endTime'] = endTime;
+        }
+        else {
+            if (since !== undefined) {
+                throw new errors.BadRequest(this.id + ' fetchOrders() requires until/endTime when since is provided.');
+            }
         }
         const response = await this.privateGetV5OrderHistory(this.extend(request, params));
         //
@@ -4830,15 +4991,15 @@ class bybit extends bybit$1 {
         await this.loadMarkets();
         const request = {
         // 'symbol': market['id'],
-        // 'category': string, Type of derivatives product: linear or option.
-        // 'baseCoin': string, Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
-        // 'orderId': string, Order ID
-        // 'orderLinkId': string, Unique user-set order ID
-        // 'orderStatus': string, Query list of orders in designated states. If this parameter is not passed, the orders in all states shall be enquired by default. This parameter supports multi-state inquiry. States should be separated with English commas.
-        // 'orderFilter': string, Conditional order or active order
-        // 'direction': string, prev: prev, next: next.
+        // 'category', Type of derivatives product: linear or option.
+        // 'baseCoin', Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
+        // 'orderId', Order ID
+        // 'orderLinkId', Unique user-set order ID
+        // 'orderStatus', Query list of orders in designated states. If this parameter is not passed, the orders in all states shall be enquired by default. This parameter supports multi-state inquiry. States should be separated with English commas.
+        // 'orderFilter', Conditional order or active order
+        // 'direction', prev: prev, next: next.
         // 'limit': number, Data quantity per page: Max data value per page is 50, and default value at 20.
-        // 'cursor': string, API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
+        // 'cursor', API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
         };
         let market = undefined;
         if (symbol === undefined) {
@@ -4920,14 +5081,14 @@ class bybit extends bybit$1 {
         let market = undefined;
         const request = {
         // 'symbol': market['id'],
-        // 'category': string, Type of derivatives product: spot, linear or option.
-        // 'baseCoin': string, Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
-        // 'orderId': string, Order ID
-        // 'orderLinkId': string, Unique user-set order ID
-        // 'orderStatus': string, // Return all status orders if not passed
-        // 'orderFilter': string, Conditional order or active order
+        // 'category', Type of derivatives product: spot, linear or option.
+        // 'baseCoin', Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
+        // 'orderId', Order ID
+        // 'orderLinkId', Unique user-set order ID
+        // 'orderStatus', // Return all status orders if not passed
+        // 'orderFilter', Conditional order or active order
         // 'limit': number, Data quantity per page: Max data value per page is 50, and default value at 20.
-        // 'cursor': string, API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
+        // 'cursor', API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
         };
         if (symbol === undefined) {
             let type = undefined;
@@ -5170,14 +5331,14 @@ class bybit extends bybit$1 {
         await this.loadMarkets();
         const request = {
         // 'symbol': market['id'],
-        // 'category': string, Type of derivatives product: linear or option.
-        // 'baseCoin': string, Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
-        // 'settleCoin': string, Settle coin. For linear, either symbol or settleCoin is required
-        // 'orderId': string, Order ID
-        // 'orderLinkId': string, Unique user-set order ID
-        // 'orderFilter': string, Conditional order or active order
+        // 'category', Type of derivatives product: linear or option.
+        // 'baseCoin', Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
+        // 'settleCoin', Settle coin. For linear, either symbol or settleCoin is required
+        // 'orderId', Order ID
+        // 'orderLinkId', Unique user-set order ID
+        // 'orderFilter', Conditional order or active order
         // 'limit': number, Data quantity per page: Max data value per page is 50, and default value at 20.
-        // 'cursor': string, API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
+        // 'cursor', API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
         // 'openOnly': 0,
         };
         let market = undefined;
@@ -5416,14 +5577,14 @@ class bybit extends bybit$1 {
         let settle = undefined;
         const request = {
         // 'symbol': market['id'],
-        // 'category': string, Type of derivatives product: linear or option.
-        // 'baseCoin': string, Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
-        // 'settleCoin': string, Settle coin. For linear, either symbol or settleCoin is required
-        // 'orderId': string, Order ID
-        // 'orderLinkId': string, Unique user-set order ID
-        // 'orderFilter': string, Conditional order or active order
+        // 'category', Type of derivatives product: linear or option.
+        // 'baseCoin', Base coin. When category=option. If not passed, BTC by default; when category=linear, if BTC passed, BTCPERP & BTCUSDT returned.
+        // 'settleCoin', Settle coin. For linear, either symbol or settleCoin is required
+        // 'orderId', Order ID
+        // 'orderLinkId', Unique user-set order ID
+        // 'orderFilter', Conditional order or active order
         // 'limit': number, Data quantity per page: Max data value per page is 50, and default value at 20.
-        // 'cursor': string, API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
+        // 'cursor', API pass-through. accountType + category + cursor +. If inconsistent, the following should be returned: The account type does not match the service inquiry.
         // 'openOnly': 0,
         };
         if (symbol !== undefined) {
@@ -6886,6 +7047,7 @@ class bybit extends bybit$1 {
         }
         if (enableUnified[1]) {
             request['settleCoin'] = settle;
+            request['limit'] = 200;
         }
         // market undefined
         [type, params] = this.handleMarketTypeAndParams('fetchPositions', undefined, params);
@@ -7111,24 +7273,26 @@ class bybit extends bybit$1 {
         symbols = this.marketSymbols(symbols);
         const [enableUnifiedMargin, enableUnifiedAccount] = await this.isUnifiedEnabled();
         let settle = this.safeString(params, 'settleCoin');
+        let paramsOmitted = undefined;
         if (settle === undefined) {
-            [settle, params] = this.handleOptionAndParams(params, 'fetchPositions', 'settle', settle);
+            [settle, paramsOmitted] = this.handleOptionAndParams(params, 'fetchPositions', 'settle', settle);
         }
         const isUsdcSettled = settle === 'USDC';
-        const [subType, query] = this.handleSubTypeAndParams('fetchPositions', undefined, params);
+        let subType = undefined;
+        [subType, paramsOmitted] = this.handleSubTypeAndParams('fetchPositions', undefined, paramsOmitted);
         const isInverse = subType === 'inverse';
         const isLinearSettle = isUsdcSettled || (settle === 'USDT');
         if (isInverse && isLinearSettle) {
             throw new errors.ArgumentsRequired(this.id + ' fetchPositions with inverse subType requires settle to not be USDT or USDC');
         }
         if ((enableUnifiedMargin || enableUnifiedAccount) && !isInverse) {
-            return await this.fetchUnifiedPositions(symbols, query);
+            return await this.fetchUnifiedPositions(symbols, params);
         }
         else if (isUsdcSettled) {
-            return await this.fetchUSDCPositions(symbols, query);
+            return await this.fetchUSDCPositions(symbols, paramsOmitted);
         }
         else {
-            return await this.fetchDerivativesPositions(symbols, query);
+            return await this.fetchDerivativesPositions(symbols, params);
         }
     }
     parsePosition(position, market = undefined) {
@@ -7266,7 +7430,7 @@ class bybit extends bybit$1 {
         let maintenanceMarginString = this.safeString(position, 'positionMM');
         let timestamp = this.parse8601(this.safeString(position, 'updated_at'));
         if (timestamp === undefined) {
-            timestamp = this.safeInteger(position, 'updatedAt');
+            timestamp = this.safeIntegerN(position, ['updatedTime', 'updatedAt']);
         }
         // default to cross of USDC margined positions
         const tradeMode = this.safeInteger(position, 'tradeMode', 0);
@@ -7311,14 +7475,14 @@ class bybit extends bybit$1 {
             }
         }
         const maintenanceMarginPercentage = Precise["default"].stringDiv(maintenanceMarginString, notional);
-        const percentage = Precise["default"].stringMul(Precise["default"].stringDiv(unrealisedPnl, initialMarginString), '100');
         const marginRatio = Precise["default"].stringDiv(maintenanceMarginString, collateralString, 4);
-        return {
+        return this.safePosition({
             'info': position,
             'id': undefined,
             'symbol': market['symbol'],
             'timestamp': timestamp,
             'datetime': this.iso8601(timestamp),
+            'lastUpdateTimestamp': undefined,
             'initialMargin': this.parseNumber(initialMarginString),
             'initialMarginPercentage': this.parseNumber(Precise["default"].stringDiv(initialMarginString, notional)),
             'maintenanceMargin': this.parseNumber(maintenanceMarginString),
@@ -7332,11 +7496,12 @@ class bybit extends bybit$1 {
             'marginRatio': this.parseNumber(marginRatio),
             'liquidationPrice': this.parseNumber(liquidationPrice),
             'markPrice': this.safeNumber(position, 'markPrice'),
+            'lastPrice': undefined,
             'collateral': this.parseNumber(collateralString),
             'marginMode': marginMode,
             'side': side,
-            'percentage': this.parseNumber(percentage),
-        };
+            'percentage': undefined,
+        });
     }
     async setMarginMode(marginMode, symbol = undefined, params = {}) {
         await this.loadMarkets();
@@ -7478,7 +7643,22 @@ class bybit extends bybit$1 {
         return await this[method](this.extend(request, params));
     }
     async setPositionMode(hedged, symbol = undefined, params = {}) {
+        /**
+         * @method
+         * @name bybit#setPositionMode
+         * @description set hedged to true or false for a market
+         * @see https://bybit-exchange.github.io/docs/v5/position/position-mode
+         * @see https://bybit-exchange.github.io/docs/derivatives/contract/position-mode
+         * @param {bool} hedged
+         * @param {string|undefined} symbol used for unified account with inverse market
+         * @param {object} params extra parameters specific to the bybit api endpoint
+         * @returns {object} response from the exchange
+         */
         await this.loadMarkets();
+        let market = undefined;
+        if (symbol !== undefined) {
+            market = this.market(symbol);
+        }
         let mode = undefined;
         if (hedged) {
             mode = 3;
@@ -7493,10 +7673,26 @@ class bybit extends bybit$1 {
             request['coin'] = 'USDT';
         }
         else {
-            const market = this.market(symbol);
             request['symbol'] = market['id'];
         }
+        const enableUnified = await this.isUnifiedEnabled();
+        let response = undefined;
+        if (enableUnified[1] || enableUnified[0]) {
+            if (symbol !== undefined) {
+                request['category'] = market['linear'] ? 'linear' : 'inverse';
+            }
+            else {
+                let subType = undefined;
+                [subType, params] = this.handleSubTypeAndParams('setPositionMode', market, params);
+                request['category'] = subType;
+            }
+            response = await this.privatePostV5PositionSwitchMode(this.extend(request, params));
+        }
+        else {
+            response = await this.privatePostContractV3PrivatePositionSwitchMode(this.extend(request, params));
+        }
         //
+        // contract v3
         //     {
         //         "ret_code": 0,
         //         "ret_msg": "ok",
@@ -7509,7 +7705,15 @@ class bybit extends bybit$1 {
         //         "rate_limit": 75
         //     }
         //
-        return await this.privatePostContractV3PrivatePositionSwitchMode(this.extend(request, params));
+        // v5
+        //     {
+        //         "retCode": 0,
+        //         "retMsg": "OK",
+        //         "result": {},
+        //         "retExtInfo": {},
+        //         "time": 1675249072814
+        //     }
+        return response;
     }
     async fetchDerivativesOpenInterestHistory(symbol, timeframe = '1h', since = undefined, limit = undefined, params = {}) {
         await this.loadMarkets();
@@ -7528,6 +7732,11 @@ class bybit extends bybit$1 {
         };
         if (since !== undefined) {
             request['startTime'] = since;
+        }
+        const until = this.safeInteger2(params, 'until', 'till'); // unified in milliseconds
+        params = this.omit(params, ['till', 'until']);
+        if (until !== undefined) {
+            request['endTime'] = until;
         }
         if (limit !== undefined) {
             request['limit'] = limit;
@@ -8304,7 +8513,14 @@ class bybit extends bybit$1 {
                     authFull = auth_base + queryEncoded;
                     url += '?' + this.rawencode(query);
                 }
-                headers['X-BAPI-SIGN'] = this.hmac(this.encode(authFull), this.encode(this.secret), sha256.sha256);
+                let signature = undefined;
+                if (this.secret.indexOf('PRIVATE KEY') > -1) {
+                    signature = rsa.rsa(authFull, this.secret, sha256.sha256);
+                }
+                else {
+                    signature = this.hmac(this.encode(authFull), this.encode(this.secret), sha256.sha256);
+                }
+                headers['X-BAPI-SIGN'] = signature;
             }
             else {
                 const query = this.extend(params, {
@@ -8314,7 +8530,13 @@ class bybit extends bybit$1 {
                 });
                 const sortedQuery = this.keysort(query);
                 const auth = this.rawencode(sortedQuery);
-                const signature = this.hmac(this.encode(auth), this.encode(this.secret), sha256.sha256);
+                let signature = undefined;
+                if (this.secret.indexOf('PRIVATE KEY') > -1) {
+                    signature = rsa.rsa(auth, this.secret, sha256.sha256);
+                }
+                else {
+                    signature = this.hmac(this.encode(auth), this.encode(this.secret), sha256.sha256);
+                }
                 if (method === 'POST') {
                     const isSpot = url.indexOf('spot') >= 0;
                     const extendedQuery = this.extend(query, {
@@ -8349,7 +8571,7 @@ class bybit extends bybit$1 {
     }
     handleErrors(httpCode, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (!response) {
-            return; // fallback to default error handler
+            return undefined; // fallback to default error handler
         }
         //
         //     {
@@ -8390,6 +8612,7 @@ class bybit extends bybit$1 {
             this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
             throw new errors.ExchangeError(feedback); // unknown message
         }
+        return undefined;
     }
 }
 

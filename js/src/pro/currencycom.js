@@ -10,7 +10,6 @@ import { Precise } from '../base/Precise.js';
 import { ArrayCache, ArrayCacheByTimestamp } from '../base/ws/Cache.js';
 import { sha256 } from '../static_dependencies/noble-hashes/sha256.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class currencycom extends currencycomRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -384,7 +383,7 @@ export default class currencycom extends currencycomRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     async watchOrderBook(symbol, limit = undefined, params = {}) {
         /**
@@ -430,7 +429,7 @@ export default class currencycom extends currencycomRest {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0);
     }
     handleDeltas(bookside, deltas) {
         const prices = Object.keys(deltas);

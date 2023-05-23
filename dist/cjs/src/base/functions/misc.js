@@ -3,12 +3,13 @@
 Object.defineProperty(exports, '__esModule', { value: true });
 
 var number = require('./number.js');
+var type = require('./type.js');
 var errors = require('../errors.js');
 
 //-------------------------------------------------------------------------
 // converts timeframe to seconds
 const parseTimeframe = (timeframe) => {
-    const amount = timeframe.slice(0, -1);
+    const amount = type.asFloat(timeframe.slice(0, -1));
     const unit = timeframe.slice(-1);
     let scale = undefined;
     if (unit === 'y') {
@@ -48,8 +49,8 @@ const buildOHLCVC = (trades, timeframe = '1m', since = -Infinity, limit = Infini
     const ms = parseTimeframe(timeframe) * 1000;
     const ohlcvs = [];
     const [timestamp, /* open */ , high, low, close, volume, count] = [0, 1, 2, 3, 4, 5, 6];
-    const oldest = Math.min(trades.length - 1, limit);
-    for (let i = 0; i <= oldest; i++) {
+    const oldest = Math.min(trades.length, limit);
+    for (let i = 0; i < oldest; i++) {
         const trade = trades[i];
         if (trade.timestamp < since) {
             continue;

@@ -8,7 +8,6 @@
 import lunoRest from '../luno.js';
 import { ArrayCache } from '../base/ws/Cache.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class luno extends lunoRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -63,7 +62,7 @@ export default class luno extends lunoRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrades(client, message, subscription) {
         //

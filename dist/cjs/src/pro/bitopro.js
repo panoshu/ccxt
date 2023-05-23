@@ -7,7 +7,6 @@ var sha512 = require('../static_dependencies/noble-hashes/sha512.js');
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
-// @ts-expect-error
 class bitopro extends bitopro$1 {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -133,7 +132,7 @@ class bitopro extends bitopro$1 {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrade(client, message) {
         //

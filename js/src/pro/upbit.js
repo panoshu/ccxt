@@ -8,7 +8,6 @@
 import upbitRest from '../upbit.js';
 import { ArrayCache } from '../base/ws/Cache.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class upbit extends upbitRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -80,7 +79,7 @@ export default class upbit extends upbitRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     async watchOrderBook(symbol, limit = undefined, params = {}) {
         /**

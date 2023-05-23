@@ -10,7 +10,6 @@ import { InvalidNonce } from '../base/errors.js';
 import { ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById } from '../base/ws/Cache.js';
 import { Precise } from '../base/Precise.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class idex extends idexRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -160,7 +159,7 @@ export default class idex extends idexRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrade(client, message) {
         const type = this.safeString(message, 'type');
@@ -257,7 +256,7 @@ export default class idex extends idexRest {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0);
     }
     handleOHLCV(client, message) {
         // { type: 'candles',
@@ -530,7 +529,7 @@ export default class idex extends idexRest {
         if (this.newUpdates) {
             limit = orders.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(orders, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(orders, since, limit, 'timestamp');
     }
     handleOrder(client, message) {
         // {
@@ -655,7 +654,7 @@ export default class idex extends idexRest {
         if (this.newUpdates) {
             limit = transactions.getLimit(code, limit);
         }
-        return this.filterBySinceLimit(transactions, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(transactions, since, limit, 'timestamp');
     }
     handleTransaction(client, message) {
         // Update Speed: Real time, updates on any deposit or withdrawal of the wallet

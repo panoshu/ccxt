@@ -11,7 +11,6 @@ import { ArrayCache, ArrayCacheByTimestamp, ArrayCacheBySymbolById } from '../ba
 import { sha512 } from '../static_dependencies/noble-hashes/sha512.js';
 import { inflateSync as inflate } from '../static_dependencies/fflake/browser.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class bittrex extends bittrexRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -219,7 +218,7 @@ export default class bittrex extends bittrexRest {
         if (this.newUpdates) {
             limit = orders.getLimit(symbol, limit);
         }
-        return this.filterBySymbolSinceLimit(orders, symbol, since, limit, true);
+        return this.filterBySymbolSinceLimit(orders, symbol, since, limit);
     }
     async subscribeToOrders(authentication, params = {}) {
         const messageHash = 'order';
@@ -394,7 +393,7 @@ export default class bittrex extends bittrexRest {
         if (this.newUpdates) {
             limit = ohlcv.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(ohlcv, since, limit, 0, true);
+        return this.filterBySinceLimit(ohlcv, since, limit, 0);
     }
     async subscribeToOHLCV(negotiation, symbol, timeframe = '1m', params = {}) {
         await this.loadMarkets();
@@ -463,7 +462,7 @@ export default class bittrex extends bittrexRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     async subscribeToTrades(negotiation, symbol, params = {}) {
         await this.loadMarkets();
@@ -529,7 +528,7 @@ export default class bittrex extends bittrexRest {
         if (this.newUpdates) {
             limit = trades.getLimit(symbol, limit);
         }
-        return this.filterBySymbolSinceLimit(trades, symbol, since, limit, true);
+        return this.filterBySymbolSinceLimit(trades, symbol, since, limit);
     }
     async subscribeToMyTrades(authentication, params = {}) {
         const messageHash = 'execution';

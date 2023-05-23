@@ -9,7 +9,6 @@ import independentreserveRest from '../independentreserve.js';
 import { NotSupported, InvalidNonce } from '../base/errors.js';
 import { ArrayCache } from '../base/ws/Cache.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class independentreserve extends independentreserveRest {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -53,7 +52,7 @@ export default class independentreserve extends independentreserveRest {
         const url = this.urls['api']['ws'] + '?subscribe=ticker-' + market['base'] + '-' + market['quote'];
         const messageHash = 'trades:' + symbol;
         const trades = await this.watch(url, messageHash, undefined, messageHash);
-        return this.filterBySinceLimit(trades, since, limit, 'timestamp', true);
+        return this.filterBySinceLimit(trades, since, limit, 'timestamp');
     }
     handleTrades(client, message) {
         //

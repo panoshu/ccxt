@@ -11,7 +11,6 @@ import { TICK_SIZE } from './base/functions/number.js';
 import { BadRequest, ArgumentsRequired, InvalidOrder, AuthenticationError, NotSupported, RateLimitExceeded, ExchangeNotAvailable, InvalidNonce, AccountSuspended, OrderNotFound } from './base/errors.js';
 import { sha256 } from './static_dependencies/noble-hashes/sha256.js';
 //  ---------------------------------------------------------------------------
-// @ts-expect-error
 export default class poloniexfutures extends Exchange {
     describe() {
         return this.deepExtend(super.describe(), {
@@ -1733,7 +1732,7 @@ export default class poloniexfutures extends Exchange {
     handleErrors(code, reason, url, method, headers, body, response, requestHeaders, requestBody) {
         if (!response) {
             this.throwBroadlyMatchedException(this.exceptions['broad'], body, body);
-            return;
+            return undefined;
         }
         //
         // bad
@@ -1747,5 +1746,6 @@ export default class poloniexfutures extends Exchange {
         this.throwExactlyMatchedException(this.exceptions['exact'], message, feedback);
         this.throwExactlyMatchedException(this.exceptions['exact'], errorCode, feedback);
         this.throwBroadlyMatchedException(this.exceptions['broad'], body, feedback);
+        return undefined;
     }
 }
